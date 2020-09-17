@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 """
 Created on Wed Sep  9 23:04:53 2020
-
 @author: hu
 """
 import tensorflow as tf
@@ -29,7 +28,7 @@ class DCNv2(KL.Layer):
         #assert deformable_groups == 1
         self.filters = filters
         self.kernel_size = (kernel_size, kernel_size)
-        self.stride = (1, 1)
+        self.stride = (1, 1, 1, 1)
         #self.padding = padding
         self.dilation = (1, 1)
         self.deformable_groups = 1
@@ -75,7 +74,7 @@ class DCNv2(KL.Layer):
             trainable = True,
             dtype = 'float32',
             )
-        
+        self.ks = self.kernel_size[0] * self.kernel_size[1]
         self.ph, self.pw = (self.kernel_size[0] - 1) / 2, (self.kernel_size[1] - 1) / 2
         self.patch_x, self.patch_y = tf.meshgrid(tf.range(-self.pw, self.pw + 1), tf.range(-self.ph, self.ph + 1))
         self.patch_x, self.patch_y = tf.reshape(self.patch_x, [1, 1, 1, -1]), tf.reshape(self.patch_y, [1, 1, 1, -1])
@@ -84,17 +83,16 @@ class DCNv2(KL.Layer):
     def call(self, x):
         #x: [B, H, W, C]
         #offset: [B, H, W, ic] convx [kh, kw, ic, 3 * groups * kh * kw] ---> [B, H, W, 3 * groups * kh * kw]
-        offset = tf.nn.conv2d(x, self.offset_kernel, strides = self.stride, padding = 'SAME', dilations = self.dilation)
+        offset = tf.nn.conv2d(x, self.offset_kernel, strides = self.stride, padding = 'SAME')
         offset += self.offset_bias
         
-        bs, ih, iw, ic = x.get_shape()
-        bs = tf.shape(x)[0]
+        bs, ih, iw, ic = tf.shape(x)[0], tf.shape(x)[1], tf.shape(x)[2], tf.shape(x)[3]
         
         #[B, H, W, oc'] oc' = groups * kh * kw
         #other implementations organize data as: [yxyxyxyxyxyxyxyxyxmmmmmmmmm]
-        oyox, mask = offset[..., :2*self.kernel_size[0]*self.kernel_size[1]], offset[..., 2*self.kernel_size[0]*self.kernel_size[1]:]
-        oy, ox = tf.split(tf.reshape(oyox, [-1, 2]), 2, axis = -1)
-        oy, ox = tf.reshape(oy, [bs, ih, iw, self.kernel_size[0]*self.kernel_size[1]]), tf.reshape(ox, [bs, ih, iw, self.kernel_size[0]*self.kernel_size[1]])
+        oyox, mask = offset[..., :2*self.ks], offset[..., 2*self.ks:]
+        oy, ox = tf.split(tf.reshape(oyox, [-1, 2]), 2, axis = 1)
+        oy, ox = tf.reshape(oy, [bs, ih, iw, self.ks]), tf.reshape(ox, [bs, ih, iw, self.ks])
         
         #we prefer: [yyyyyyyyyxxxxxxxxxmmmmmmmmm]
         #oy, ox, mask = tf.split(offset, 3, axis = -1)
