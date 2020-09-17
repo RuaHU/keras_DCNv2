@@ -86,7 +86,8 @@ class DCNv2(KL.Layer):
         offset = tf.nn.conv2d(x, self.offset_kernel, strides = self.stride, padding = 'SAME')
         offset += self.offset_bias
         
-        bs, ih, iw, ic = tf.shape(x)[0], tf.shape(x)[1], tf.shape(x)[2], tf.shape(x)[3]
+        bs, ih, iw, ic = [v.value for v in x.shape]
+        bs = tf.shape(x)[0]
         
         #[B, H, W, oc'] oc' = groups * kh * kw
         #other implementations organize data as: [yxyxyxyxyxyxyxyxyxmmmmmmmmm]
