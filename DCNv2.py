@@ -145,23 +145,19 @@ class DCNv2(KL.Layer):
         x = tf.pad(x, [[0, 0], [int(self.ph), int(self.ph)], [int(self.pw), int(self.pw)], [0, 0]])
         
         #[[B * H * W, ic]] * oc'
-        map_00 = [tf.reshape(tf.gather_nd(x, tf.reshape(grid_ix0iy0[:, :, :, i, :], [-1, 3])), [bs, ih, iw, ic]) for i in range(ox.get_shape()[-1])]
-        map_01 = [tf.reshape(tf.gather_nd(x, tf.reshape(grid_ix0iy1[:, :, :, i, :], [-1, 3])), [bs, ih, iw, ic]) for i in range(ox.get_shape()[-1])]
-        map_11 = [tf.reshape(tf.gather_nd(x, tf.reshape(grid_ix1iy1[:, :, :, i, :], [-1, 3])), [bs, ih, iw, ic]) for i in range(ox.get_shape()[-1])]
-        map_10 = [tf.reshape(tf.gather_nd(x, tf.reshape(grid_ix1iy0[:, :, :, i, :], [-1, 3])), [bs, ih, iw, ic]) for i in range(ox.get_shape()[-1])]
+        map_00 = tf.gather_nd(x, grid_ix0iy0)
+        map_01 = tf.gather_nd(x, grid_ix0iy1)
+        map_11 = tf.gather_nd(x, grid_ix1iy1)
+        map_10 = tf.gather_nd(x, grid_ix1iy0)
 
         #[[B,  H,  W, ic] * [B, H, W, 1] = [B, H, W, ic]] * oc'
-        map_bilinear = [(w_11[..., i:i+1] * map_00[i] + \
-                         w_10[..., i:i+1] * map_01[i] + \
-                         w_00[..., i:i+1] * map_11[i] + \
-                         w_01[..., i:i+1] * map_10[i]) * \
-                         mask[..., i:i+1] \
-                         for i in range(ox.get_shape()[-1])]
+        map_bilinear = (tf.expand_dims(w_11, axis = -1) * map_00 + \
+                        tf.expand_dims(w_10, axis = -1) * map_01 + \
+                        tf.expand_dims(w_00, axis = -1) * map_11 + \
+                        tf.expand_dims(w_01, axis = -1) * map_10) * tf.expand_dims(mask, axis = -1)
         
-        #[B, H, W, oc', ic] ---> [B, H, W, kw * kh * groups, ic]
-        map_all = tf.stack(map_bilinear, axis = 3)
         #[B, H, W, kh *kw * ic] #group always == 1
-        map_all = tf.reshape(map_all, [bs, ih, iw, -1])
+        map_all = tf.reshape(map_bilinear, [bs, ih, iw, -1])
         #[B, H, W, kh * kw * ic] convx [1, 1, kh * kw * ic, oc] = [B, H, W, oc]
         output = tf.nn.conv2d(map_all, tf.reshape(self.kernel, [1, 1, -1, self.filters]), strides = self.stride, padding = 'SAME')
         if self.use_bias:
