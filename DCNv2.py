@@ -42,7 +42,7 @@ class DCNv2(KL.Layer):
     def build(self, input_shape):
         self.kernel = self.add_weight(
             name = 'kernel',
-            shape = self.kernel_size + (input_shape[-1], self.filters),
+            shape = self.kernel_size + (input_shape[-1].value, self.filters),
             initializer = self.kernel_initializer,
             regularizer = self.kernel_regularizer,
             trainable = True,
